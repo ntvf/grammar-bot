@@ -1,0 +1,152 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Test, Checkstyle, Coverage
+        run: ./mvnw verify
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: target/site/jacoco/jacoco.xml
+          fail_ci_if_error: false
+
+      - name: Coverage summary
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "**Line coverage: $(python3 -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('target/site/jacoco/jacoco.xml')
+          for c in tree.getroot().findall('counter'):
+              if c.get('type') == 'LINE':
+                  missed, covered = int(c.get('missed')), int(c.get('covered'))
+                  print(f'{round(covered / (missed + covered) * 100, 1)}%')
+                  break
+          ")** (quality gate: 85% line, 75% branch)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Class | Lines covered |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          python3 -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('target/site/jacoco/jacoco.xml')
+          for pkg in tree.getroot().findall('package'):
+              for cls in pkg.findall('class'):
+                  name = cls.get('name').split('/')[-1]
+                  for c in cls.findall('counter'):
+                      if c.get('type') == 'LINE':
+                          missed, covered = int(c.get('missed')), int(c.get('covered'))
+                          total = missed + covered
+                          if total > 0:
+                              pct = round(covered / total * 100)
+                              print(f'| {name} | {covered}/{total} ({pct}%) |')
+          " >> $GITHUB_STEP_SUMMARY
+
+      - name: Build and extract layers
+        run: |
+          ./mvnw package -DskipTests \
+            -Dbuild.tag=v1.0.${{ github.run_number }} \
+            -Dbuild.commit=${{ github.sha }}
+          cp target/grammar-0.0.1-SNAPSHOT.jar target/grammar.jar
+
+          # Extract into layers
+          mkdir -p extracted
+          java -Djarmode=tools -jar target/grammar.jar extract --destination extracted
+
+          # App layer — thin JAR with only compiled app classes (~100KB)
+          cp extracted/grammar.jar target/grammar-app.jar
+
+          # Checksum of all lib JARs — used by update script to detect dep changes
+          find extracted/lib -name "*.jar" | sort | xargs md5sum | md5sum | cut -d' ' -f1 > target/grammar-libs-checksum.txt
+
+          echo "Full JAR:  $(du -sh target/grammar.jar | cut -f1)"
+          echo "App layer: $(du -sh target/grammar-app.jar | cut -f1)"
+          echo "Libs hash: $(cat target/grammar-libs-checksum.txt)"
+
+      - name: Generate tag and release notes
+        id: meta
+        run: |
+          TAG="v1.0.${{ github.run_number }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="$PREV_TAG..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          NOTES=$(git log --pretty=format:"- %s" $RANGE | head -50)
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Release ${{ steps.meta.outputs.tag }}
+          body: |
+            ## Changes
+            ${{ steps.meta.outputs.notes }}
+          files: |
+            target/grammar.jar
+            target/grammar-app.jar
+            target/grammar-libs-checksum.txt
+
+  dependency-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Get date for cache key
+        id: date
+        run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Cache NVD database
+        uses: actions/cache@v6
+        with:
+          path: ~/.dependency-check-data
+          key: nvd-${{ steps.date.outputs.date }}
+          restore-keys: nvd-
+
+      - name: OWASP Dependency Check
+        run: |
+          EXTRA="-DossindexAnalyzerEnabled=false"
+          if [ -n "${{ secrets.NVD_API_KEY }}" ]; then
+            EXTRA="$EXTRA -DnvdApiKey=${{ secrets.NVD_API_KEY }}"
+          fi
+          ./mvnw dependency-check:check -DfailBuildOnCVSS=7 $EXTRA
+
+      - name: Upload OWASP report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-check-report
+          path: target/dependency-check-report.html

@@ -1,0 +1,15 @@
+# Local development database. Tests don't need it — they start their own via Testcontainers.
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: grammar
+      POSTGRES_USER: grammar
+      POSTGRES_PASSWORD: grammar
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grammar"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

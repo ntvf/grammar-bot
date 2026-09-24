@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:18:///grammar
+    username: test
+    password: test
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+
+app:
+  daily-limit: 5
+  admin-chat-ids: 999
+  inline-debounce-ms: 0
+
+telegram:
+  bot-token: test-token
+  bot-username: test_grammar_bot
+
+telegrambots:
+  enabled: false
+
+spring.ai.openai:
+  api-key: test-key

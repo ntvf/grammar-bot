@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+
+    <!--
+        FALSE POSITIVES — Telegram Java bot library (org.telegram:telegrambots-*).
+        OWASP CPE matching maps these jars to cpe:2.3:a:telegram:telegram based on the version number,
+        but the CVEs below describe the Telegram desktop/mobile apps, not the Java Bot API client.
+    -->
+    <suppress>
+        <notes>False positive: CVE-2019-10044 affects the Telegram desktop client, not the Java bot library.</notes>
+        <packageUrl regex="true">^pkg:maven/org\.telegram/.*$</packageUrl>
+        <cve>CVE-2019-10044</cve>
+    </suppress>
+    <suppress>
+        <notes>False positive: CVE-2024-7014 affects the Telegram desktop client, not the Java bot library.</notes>
+        <packageUrl regex="true">^pkg:maven/org\.telegram/.*$</packageUrl>
+        <cve>CVE-2024-7014</cve>
+    </suppress>
+
+    <!--
+        Real vulnerabilities must NOT be suppressed permanently. If one has no fix yet, suppress it with
+        until="YYYY-MM-DDZ" (max 3 months) so the build forces a re-evaluation.
+    -->
+
+</suppressions>

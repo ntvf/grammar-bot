@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: grammar
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:grammar}
+    username: ${DB_USER:grammar}
+    password: ${DB_PASSWORD:grammar}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+  threads:
+    virtual:
+      enabled: true
+
+app:
+  daily-limit: ${DAILY_LIMIT:150}
+  max-input-length: 2000
+  retention-days: 30
+  log-ai-content: ${LOG_AI_CONTENT:true}
+  admin-chat-ids: ${ADMIN_CHAT_IDS:}
+  inline-min-length: 3
+  inline-debounce-ms: 800
+
+telegram:
+  bot-token: ${TELEGRAM_BOT_TOKEN}
+  bot-username: ${TELEGRAM_BOT_USERNAME}
+
+spring.ai.openai:
+  api-key: ${OPENAI_API_KEY}
+  chat:
+    options:
+      model: ${OPENAI_MODEL:gpt-5.4-mini}
+      temperature: 0.2

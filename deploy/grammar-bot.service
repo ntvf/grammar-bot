@@ -1,0 +1,25 @@
+[Unit]
+Description=Grammar Telegram bot
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=grammar
+Group=grammar
+WorkingDirectory=/opt/grammar-bot/current
+EnvironmentFile=/etc/grammar-bot/grammar-bot.env
+ExecStart=/bin/sh -c 'exec java $JAVA_OPTS -jar grammar.jar'
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+
+# Hardening: the bot only needs outbound HTTPS and its database.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/grammar-bot
+
+[Install]
+WantedBy=multi-user.target
