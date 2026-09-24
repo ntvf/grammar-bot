@@ -1,10 +1,10 @@
-# Grammar Bot
+# Rewryt — grammar & translation bot
 
 ![Build & Release](https://github.com/ntvf/grammar-bot/actions/workflows/release.yml/badge.svg)
 ![CodeQL](https://github.com/ntvf/grammar-bot/actions/workflows/codeql.yml/badge.svg)
 [![Coverage](https://codecov.io/gh/ntvf/grammar-bot/branch/main/graph/badge.svg)](https://codecov.io/gh/ntvf/grammar-bot)
 
-A Telegram bot that polishes and translates your messages before you send them. Write something — get it
+[@RewrytBot](https://t.me/RewrytBot) is a Telegram bot that polishes and translates your messages before you send them. Write something — get it
 back corrected, or translated into the language you need, keeping your own voice. One tap for another
 version, a different style, another language, or an explanation of what changed.
 

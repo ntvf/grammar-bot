@@ -298,7 +298,7 @@ def draw_chrome(img, t):
     d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=ACCENT + (255,))
     e = emoji_image("✍️", 30 * SCALE)
     img.alpha_composite(e, (cx - e.width // 2, cy - e.height // 2))
-    d.text((cx + r + 18 * SCALE, cy - 30 * SCALE), "Grammar Bot", font=HEAD_FONT, fill=TEXT)
+    d.text((cx + r + 18 * SCALE, cy - 30 * SCALE), "Rewryt", font=HEAD_FONT, fill=TEXT)
     typing = any(a <= t < b for a, b in TYPING)
     d.text((cx + r + 18 * SCALE, cy + 4 * SCALE), "typing…" if typing else "bot",
            font=SUB_FONT, fill=ACCENT if typing else MUTED)
