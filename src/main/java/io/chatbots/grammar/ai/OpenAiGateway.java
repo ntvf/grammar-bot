@@ -1,5 +1,6 @@
 package io.chatbots.grammar.ai;
 
+import io.chatbots.grammar.config.AppProperties;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -42,17 +43,26 @@ public class OpenAiGateway {
             .build();
 
     private final ChatClient chatClient;
+    private final AppProperties.Ai ai;
 
-    public OpenAiGateway(ChatClient.Builder chatClientBuilder) {
+    public OpenAiGateway(ChatClient.Builder chatClientBuilder, AppProperties properties) {
         this.chatClient = chatClientBuilder.build();
+        this.ai = properties.ai();
     }
 
     public AiResult complete(String systemPrompt, String userPrompt, double temperature) {
         return chatClient.prompt()
             .system(systemPrompt)
             .user(userPrompt)
-            .options(OpenAiChatOptions.builder().responseFormat(STRUCTURED_FORMAT).temperature(temperature))
+            .options(options(temperature, ai))
             .call()
             .entity(AiResult.class);
+    }
+
+    static OpenAiChatOptions.Builder options(double temperature, AppProperties.Ai ai) {
+        var builder = OpenAiChatOptions.builder().responseFormat(STRUCTURED_FORMAT);
+        if (ai.temperatureSupported()) builder.temperature(temperature);
+        if (ai.reasoningEffort() != null && !ai.reasoningEffort().isBlank()) builder.reasoningEffort(ai.reasoningEffort());
+        return builder;
     }
 }

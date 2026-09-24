@@ -1,5 +1,6 @@
 package io.chatbots.grammar.ai;
 
+import io.chatbots.grammar.config.AppProperties;
 import io.chatbots.grammar.domain.Language;
 import io.chatbots.grammar.domain.Mode;
 import io.chatbots.grammar.domain.TextAction;
@@ -113,6 +114,21 @@ class TextAiServiceTest {
         var result = TextAiService.normalize(REQUEST, new AiResult("I went", "en", TextAction.CORRECTED, changes));
         assertThat(result.changes()).hasSize(PromptBuilder.MAX_CHANGES)
             .extracting(AiResult.Change::original).containsExactly("a", "b", "c", "d", "e");
+    }
+
+    @Test
+    void reasoningModel_getsNoTemperatureButAReasoningEffort() {
+        var options = OpenAiGateway.options(0.9, new AppProperties.Ai(false, "low")).build();
+        assertThat(options.getTemperature()).isNull();
+        assertThat(options.getReasoningEffort()).isEqualTo("low");
+        assertThat(options.getResponseFormat()).isNotNull();
+    }
+
+    @Test
+    void classicModel_getsTemperatureAndNoReasoningEffort() {
+        var options = OpenAiGateway.options(0.2, new AppProperties.Ai(true, " ")).build();
+        assertThat(options.getTemperature()).isEqualTo(0.2);
+        assertThat(options.getReasoningEffort()).isNull();
     }
 
     @Test

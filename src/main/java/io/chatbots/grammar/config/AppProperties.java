@@ -12,10 +12,19 @@ public record AppProperties(
     boolean logAiContent,
     List<Long> adminChatIds,
     int inlineMinLength,
-    long inlineDebounceMs
+    long inlineDebounceMs,
+    Ai ai
 ) {
     public AppProperties {
         adminChatIds = adminChatIds == null ? List.of() : List.copyOf(adminChatIds);
+        ai = ai == null ? new Ai(true, null) : ai;
+    }
+
+    /**
+     * Model capabilities differ: reasoning models such as gpt-6-luna reject any temperature but their default,
+     * and instead take a reasoning effort.
+     */
+    public record Ai(boolean temperatureSupported, String reasoningEffort) {
     }
 
     public boolean isAdmin(long chatId) {

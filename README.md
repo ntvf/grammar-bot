@@ -112,7 +112,9 @@ Logs: `/var/log/grammar/app.log`, `/var/log/grammar/update.log`.
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
 | `TELEGRAM_BOT_USERNAME` | Bot username (without @) |
 | `OPENAI_API_KEY` | OpenAI API key |
-| `OPENAI_MODEL` | Model (default: `gpt-5.4-mini`) |
+| `OPENAI_MODEL` | Model (default: `gpt-6-luna`) |
+| `OPENAI_TEMPERATURE_SUPPORTED` | Send temperature (default `false` — gpt-6-luna rejects it; set `true` for e.g. `gpt-5.4-mini`) |
+| `OPENAI_REASONING_EFFORT` | Reasoning effort for reasoning models (default `low`; blank to omit) |
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | PostgreSQL (defaults: `localhost` / `5432` / `grammar` / `grammar` / `grammar`) |
 | `ADMIN_CHAT_IDS` | Comma-separated chat ids allowed to use `/stats`; not rate-limited |
 | `DAILY_LIMIT` | AI requests per user per day (default: 150) |

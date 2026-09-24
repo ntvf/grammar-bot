@@ -27,6 +27,10 @@ app:
   admin-chat-ids: ${ADMIN_CHAT_IDS:}
   inline-min-length: 3
   inline-debounce-ms: 800
+  ai:
+    # gpt-6-luna only accepts its default temperature; set true for models like gpt-5.4-mini.
+    temperature-supported: ${OPENAI_TEMPERATURE_SUPPORTED:false}
+    reasoning-effort: ${OPENAI_REASONING_EFFORT:low}
 
 telegram:
   bot-token: ${TELEGRAM_BOT_TOKEN}
@@ -36,5 +40,4 @@ spring.ai.openai:
   api-key: ${OPENAI_API_KEY}
   chat:
     options:
-      model: ${OPENAI_MODEL:gpt-5.4-mini}
-      temperature: 0.2
+      model: ${OPENAI_MODEL:gpt-6-luna}
