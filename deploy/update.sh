@@ -1,42 +1,58 @@
-#!/usr/bin/env bash
-# Installs the latest GitHub release if it is newer than the running one.
-# The 130 MB of libraries are only downloaded when their checksum changes; otherwise just the ~100 KB
-# application layer is swapped. Run from cron, e.g.:  */5 * * * * /opt/grammar-bot/update.sh
+#!/bin/bash
+# Installs the latest GitHub release if it is newer than the deployed one. Run as root by grammar-update.timer.
+# Library layer (~130 MB) is only downloaded when its checksum changes; otherwise just the app layer (~0.4 MB).
 set -euo pipefail
 
-REPO="${REPO:-ntvf/grammar-bot}"
-BASE=/opt/grammar-bot
-CURRENT="$BASE/current"
-API="https://api.github.com/repos/$REPO/releases/latest"
-AUTH=()
-[[ -n "${GITHUB_TOKEN:-}" ]] && AUTH=(-H "Authorization: Bearer $GITHUB_TOKEN")
+REPO="ntvf/grammar-bot"
+INSTALL_DIR="/opt/grammar"
+EXTRACTED_DIR="$INSTALL_DIR/extracted"
+VERSION_FILE="$INSTALL_DIR/version"
+LIBS_CHECKSUM_FILE="$INSTALL_DIR/libs-checksum"
+JAVA=/opt/java/current/bin/java
+LOG="/var/log/grammar/update.log"
 
-release=$(curl -fsSL "${AUTH[@]}" "$API")
-tag=$(grep -m1 '"tag_name"' <<<"$release" | cut -d'"' -f4)
-[[ -z "$tag" ]] && { echo "No release found"; exit 1; }
-[[ "$(cat "$BASE/version" 2>/dev/null)" == "$tag" ]] && exit 0
+log() { echo "$(date -Is) $*" >> "$LOG"; }
 
-asset() { echo "https://github.com/$REPO/releases/download/$tag/$1"; }
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+asset_url() {
+  python3 -c "
+import sys, json
+for a in json.load(sys.stdin)['assets']:
+    if a['name'] == '$1':
+        print(a['browser_download_url'])
+" <<<"$RELEASE_JSON"
+}
 
-curl -fsSL "${AUTH[@]}" -o "$work/libs.txt" "$(asset grammar-libs-checksum.txt)"
-if [[ ! -d "$CURRENT/lib" || "$(cat "$BASE/libs-checksum" 2>/dev/null)" != "$(cat "$work/libs.txt")" ]]; then
-  echo "Libraries changed — downloading full JAR for $tag"
-  curl -fsSL "${AUTH[@]}" -o "$work/grammar.jar" "$(asset grammar.jar)"
-  java -Djarmode=tools -jar "$work/grammar.jar" extract --destination "$work/extracted"
-  rm -rf "$BASE/next" && mv "$work/extracted" "$BASE/next"
+RELEASE_JSON=$(curl -sf "https://api.github.com/repos/$REPO/releases/latest") || { log "ERROR: GitHub API unreachable"; exit 1; }
+LATEST_TAG=$(python3 -c "import sys, json; print(json.load(sys.stdin)['tag_name'])" <<<"$RELEASE_JSON")
+CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "none")
+[ "$LATEST_TAG" = "$CURRENT" ] && exit 0
+
+log "New release: $LATEST_TAG (was $CURRENT)"
+LATEST_LIBS=$(curl -sfL "$(asset_url grammar-libs-checksum.txt)" || echo "")
+CURRENT_LIBS=$(cat "$LIBS_CHECKSUM_FILE" 2>/dev/null || echo "")
+
+if [ "$LATEST_LIBS" != "$CURRENT_LIBS" ] || [ ! -d "$EXTRACTED_DIR/lib" ]; then
+  log "Libraries changed or first deploy — full extraction"
+  curl -sfL "$(asset_url grammar.jar)" -o "$INSTALL_DIR/grammar.jar"
+  rm -rf "$EXTRACTED_DIR.new"
+  "$JAVA" -Djarmode=tools -jar "$INSTALL_DIR/grammar.jar" extract --destination "$EXTRACTED_DIR.new"
+  rm -f "$INSTALL_DIR/grammar.jar"
+  rm -rf "$EXTRACTED_DIR.previous"
+  [ -d "$EXTRACTED_DIR" ] && mv "$EXTRACTED_DIR" "$EXTRACTED_DIR.previous"
+  mv "$EXTRACTED_DIR.new" "$EXTRACTED_DIR"
+  echo "$LATEST_LIBS" > "$LIBS_CHECKSUM_FILE"
 else
-  echo "Only application changed — downloading app layer for $tag"
-  rm -rf "$BASE/next" && cp -a "$CURRENT" "$BASE/next"
-  curl -fsSL "${AUTH[@]}" -o "$BASE/next/grammar.jar" "$(asset grammar-app.jar)"
+  log "Libraries unchanged — app layer only"
+  curl -sfL "$(asset_url grammar-app.jar)" -o "$EXTRACTED_DIR/grammar.jar.new"
+  cp "$EXTRACTED_DIR/grammar.jar" "$EXTRACTED_DIR/grammar.jar.previous"
+  mv "$EXTRACTED_DIR/grammar.jar.new" "$EXTRACTED_DIR/grammar.jar"
 fi
 
-rm -rf "$BASE/previous"
-[[ -d "$CURRENT" ]] && mv "$CURRENT" "$BASE/previous"
-mv "$BASE/next" "$CURRENT"
-cp "$work/libs.txt" "$BASE/libs-checksum"
-echo "$tag" > "$BASE/version"
+echo "$LATEST_TAG" > "$VERSION_FILE"
 
-sudo systemctl restart grammar-bot
-echo "Deployed $tag (previous version kept in $BASE/previous)"
+# Only this bot's JVM — other bots on the host must not be touched. immortal restarts it.
+if pkill -f -- '-jar grammar\.jar$'; then
+  log "Restarted with $LATEST_TAG"
+else
+  log "Deployed $LATEST_TAG (process was not running)"
+fi

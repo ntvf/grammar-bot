@@ -1,0 +1,7 @@
+cmd: /opt/grammar/run.sh
+user: grammar
+log:
+  file: /var/log/grammar/app.log
+  age: 86400
+  num: 7
+  size: 100

@@ -1,0 +1,6 @@
+[Unit]
+Description=Check and deploy latest grammar-bot release
+
+[Service]
+Type=oneshot
+ExecStart=/opt/grammar/update.sh

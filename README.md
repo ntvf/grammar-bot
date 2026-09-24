@@ -80,25 +80,30 @@ Commands and descriptions are registered by the bot itself on startup.
 ## Deployment (private server)
 
 Each push to `main` publishes a [GitHub Release](https://github.com/ntvf/grammar-bot/releases) with the full
-JAR, a thin app-layer JAR (~100 KB) and a checksum of the library layer.
+JAR, a thin app-layer JAR and a checksum of the library layer. The server layout matches the other bots on
+the host: app in `/opt/grammar`, supervised by [immortal](https://immortal.run) (`/etc/immortal/grammar.yml`),
+auto-updated by `grammar-update.timer` every 5 minutes. It runs as an unprivileged `grammar` user with its own
+PostgreSQL role and database.
 
-One-time setup:
+One-time setup (needs root; copy `deploy/` to the server first):
 ```bash
-sudo useradd --system --home /opt/grammar-bot grammar
-sudo -u postgres createuser grammar -P && sudo -u postgres createdb -O grammar grammar
-sudo mkdir -p /opt/grammar-bot /etc/grammar-bot && sudo chown grammar: /opt/grammar-bot
-sudo cp deploy/grammar-bot.env.example /etc/grammar-bot/grammar-bot.env   # fill in, chmod 600
-sudo cp deploy/grammar-bot.service /etc/systemd/system/ && sudo systemctl enable grammar-bot
-sudo cp deploy/update.sh /opt/grammar-bot/ && sudo -u grammar /opt/grammar-bot/update.sh
+scp -r deploy tymur@10.42.1.16:grammar-deploy
+ssh -t tymur@10.42.1.16 'sudo bash grammar-deploy/install.sh'
+```
+`install.sh` creates the user, database and `/opt/grammar/env` (OpenAI key and DB host copied from the
+reminder bot's env, random DB password), asks for the Telegram token (validated against Telegram, username
+filled in automatically) and your Telegram id for `/stats`, downloads the latest release and starts the bot.
+It is safe to re-run.
+
+Change a secret later (restarts the bot):
+```bash
+ssh -t tymur@10.42.1.16 'sudo /opt/grammar/set-secret.sh TELEGRAM_BOT_TOKEN'
+ssh -t tymur@10.42.1.16 'sudo /opt/grammar/set-secret.sh OPENAI_API_KEY'
 ```
 
-`deploy/update.sh` (run it from cron) installs the latest release only when it's new, downloads the
-~130 MB library layer only when its checksum changed, keeps the previous version in
-`/opt/grammar-bot/previous` for rollback, and restarts the service. The service user needs
-`sudo systemctl restart grammar-bot` rights (or run the script as root). Set `REPO` / `GITHUB_TOKEN` if the
-repository is private.
-
-Requires Java 25 and PostgreSQL 14+ on the server. Migrations run automatically on start.
+`update.sh` downloads the ~130 MB library layer only when its checksum changes, keeps the previous build
+(`extracted.previous` / `grammar.jar.previous`) for rollback, and restarts only this bot's JVM.
+Logs: `/var/log/grammar/app.log`, `/var/log/grammar/update.log`.
 
 ### Environment variables
 
