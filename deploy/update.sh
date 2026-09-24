@@ -2,6 +2,8 @@
 # Installs the latest GitHub release if it is newer than the deployed one. Run as root by grammar-update.timer.
 # Library layer (~130 MB) is only downloaded when its checksum changes; otherwise just the app layer (~0.4 MB).
 set -euo pipefail
+# The bot runs as the unprivileged "grammar" user, so everything installed here must be world-readable.
+umask 022
 
 REPO="ntvf/grammar-bot"
 INSTALL_DIR="/opt/grammar"

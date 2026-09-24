@@ -32,7 +32,7 @@ SQL
     || sudo -u postgres createdb -O grammar grammar
 
   echo "== Environment (OpenAI key copied from the reminder bot)"
-  umask 077
+  install -m 600 -o grammar -g grammar /dev/null "$ENV_FILE"
   cat > "$ENV_FILE" <<ENV
 DB_HOST=$(reminder_value DB_HOST)
 DB_PORT=$(reminder_value DB_PORT)
@@ -44,8 +44,6 @@ TELEGRAM_BOT_TOKEN=
 TELEGRAM_BOT_USERNAME=
 ADMIN_CHAT_IDS=$(reminder_value ADMIN_CHAT_IDS)
 ENV
-  chown grammar:grammar "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
 fi
 
 if ! grep -q '^TELEGRAM_BOT_TOKEN=.\+' "$ENV_FILE"; then
