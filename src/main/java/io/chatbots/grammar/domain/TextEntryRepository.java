@@ -15,6 +15,10 @@ public interface TextEntryRepository extends JpaRepository<TextEntry, Long> {
 
     Optional<TextEntry> findFirstByChatUserAndSourceMessageIdOrderByIdDesc(ChatUser chatUser, Integer sourceMessageId);
 
+    /** Result languages this user ended up with, most used first. */
+    @Query("SELECT t.targetLanguage FROM TextEntry t WHERE t.chatUser = ?1 GROUP BY t.targetLanguage ORDER BY COUNT(t) DESC")
+    List<Language> targetLanguagesByUse(ChatUser chatUser);
+
     long countByCreatedAtAfter(LocalDateTime since);
 
     @Query("SELECT t.action, COUNT(t) FROM TextEntry t WHERE t.createdAt > ?1 AND t.action IS NOT NULL GROUP BY t.action")

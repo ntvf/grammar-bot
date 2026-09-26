@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
-"""Renders the onboarding demo clip shown on /start and /help.
+"""Renders the onboarding demo clips shown on /start and /help, one per interface language.
 
 Draws a Telegram-style chat frame by frame and pipes the frames into ffmpeg. Telegram plays a silent
 H.264 MP4 sent via sendAnimation as a looping GIF, at a fraction of a real GIF's size.
 
-    python3 -m venv .venv && .venv/bin/pip install pillow
-    .venv/bin/python tools/demo/generate_demo.py
+The script: the user writes in their own language and gets it back in English (English speakers get their
+text corrected), then taps Style → Shorter. Button labels come from the i18n bundles.
 
-Writes src/main/resources/onboarding/demo.mp4 and docs/demo.gif (README preview).
+    python3 -m venv .venv && .venv/bin/pip install pillow
+    .venv/bin/python tools/demo/generate_demo.py [lang ...]
+
+Writes src/main/resources/onboarding/demo_<lang>.mp4 and docs/demo.gif (README preview, English).
 Needs ffmpeg on PATH. Fonts default to macOS system fonts; override with DEMO_FONT / DEMO_EMOJI_FONT.
 """
 import os
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-MP4_OUT = ROOT / "src/main/resources/onboarding/demo.mp4"
+MP4_DIR = ROOT / "src/main/resources/onboarding"
+I18N_DIR = ROOT / "src/main/resources/i18n"
 GIF_OUT = ROOT / "docs/demo.gif"
 
 W, H = 720, 900
@@ -140,8 +145,8 @@ class Bubble:
     buttons: list = field(default_factory=list)  # rows of labels
     typing_until: float = 0            # show "..." bubble before appear
     changes: list = field(default_factory=list)  # (time, new_text, new_buttons)
-    working: tuple = None              # (start, end, row, col): button shows "Working…" and pulses
-    tap: tuple = None                  # (time, row, col)
+    working: list = field(default_factory=list)  # (start, end, row, col): button shows "Working…" and pulses
+    taps: list = field(default_factory=list)     # (time, row, col)
 
 
 MSG_FONT = font(26)
@@ -198,18 +203,19 @@ def draw_bubble(img, b, t, x_right_edge, y_bottom, progress):
             cw = (bw - (len(row) - 1) * BTN_GAP) / len(row)
             for c, label in enumerate(row):
                 bx = x + c * (cw + BTN_GAP)
-                working = b.working and b.working[0] <= t < b.working[1] and (r, c) == b.working[2:]
+                working = next((w for w in b.working if w[0] <= t < w[1] and (r, c) == w[2:]), None)
                 shade = BUTTON
                 if working:
-                    pulse = 0.5 + 0.5 * abs(((t - b.working[0]) * 2) % 2 - 1)
+                    pulse = 0.5 + 0.5 * abs(((t - working[0]) * 2) % 2 - 1)
                     shade = (0, 0, 0, int(42 + 40 * pulse))
-                    label = "⏳ Working on it…"
+                    label = SCENE.working_label
                 d.rounded_rectangle((bx, by, bx + cw, by + BTN_H), radius=12 * SCALE, fill=shade)
                 lw = text_width(label, BTN_FONT)
                 draw_text(layer, (bx + (cw - lw) / 2, by + (BTN_H - BTN_FONT.size) / 2 - 3 * SCALE), label,
                           BTN_FONT, (255, 255, 255))
-                if b.tap and (r, c) == b.tap[1:] and 0 <= t - b.tap[0] < 0.6:
-                    k = (t - b.tap[0]) / 0.6
+                tap = next((p for p in b.taps if (r, c) == p[1:] and 0 <= t - p[0] < 0.6), None)
+                if tap:
+                    k = (t - tap[0]) / 0.6
                     rad = int((18 + 50 * k) * SCALE)
                     cx, cy = bx + cw / 2, by + BTN_H / 2
                     ImageDraw.Draw(ripple).ellipse((cx - rad, cy - rad, cx + rad, cy + rad),
@@ -244,32 +250,85 @@ def draw_typing_dots(img, t, y_bottom):
 
 # ---------------------------------------------------------------- script
 
-T_INPUT_1, T_SEND_1 = 0.3, 2.6
-FIRST = "i has went to the shop yesterday and buyed some apple"
-FIRST_FIXED = "I went to the shop yesterday and bought some apples."
-FORMAL = "Yesterday, I visited the store and purchased some apples."
-T_INPUT_2, T_SEND_2 = 8.4, 10.2
-SECOND = "Привіт! Можеш надіслати звіт до п'ятниці?"
-SECOND_FIXED = "Hi! Could you send me the report by Friday?"
-DURATION = 14.5
+TARGETS = [("en", "🇬🇧 English"), ("de", "🇩🇪 Deutsch"), ("es", "🇪🇸 Español"), ("it", "🇮🇹 Italiano"),
+           ("fr", "🇫🇷 Français"), ("pl", "🇵🇱 Polski"), ("uk", "🇺🇦 Українська")]
+
+ENGLISH = "Hi! I can't come to the meeting tomorrow because I'm sick. Can we move it to Friday?"
+ENGLISH_SHORTER = "I'm sick and can't come to the meeting tomorrow. Can we move it to Friday?"
+
+# lang: (typed with mistakes, fixed)
+MESSAGES = {
+    "en": ("hi! i cant come to the meeting tommorow becouse i am sick. can we move it on friday?",
+           "Hi! I can't come to the meeting tomorrow because I'm sick. Can we move it to Friday?"),
+    "uk": ("привіт! я не зможу прийти на зустріч завтра бо захворів. можемо перенести її на пятницю?",
+           "Привіт! Я не зможу прийти на зустріч завтра, бо захворів. Можемо перенести її на п’ятницю?"),
+    "ru": ("привет! я не смогу прийти на встречу завтра потомучто заболел. можем перенести её на пятницу?",
+           "Привет! Я не смогу прийти на встречу завтра, потому что заболел. Можем перенести её на пятницу?"),
+    "de": ("hallo! ich kann morgen nicht zum meeting kommen weil ich bin krank. können wir es auf freitag verschieben?",
+           "Hallo! Ich kann morgen nicht zum Meeting kommen, weil ich krank bin. Können wir es auf Freitag verschieben?"),
+    "es": ("hola! no puedo ir a la reunion mañana por que estoy enfermo. podemos pasarla al viernes?",
+           "¡Hola! No puedo ir a la reunión mañana porque estoy enfermo. ¿Podemos pasarla al viernes?"),
+    "fr": ("salut! je peux pas venir a la réunion demain parce que je suis malade. on peut la déplacer a vendredi?",
+           "Salut ! Je ne peux pas venir à la réunion demain parce que je suis malade. On peut la déplacer à vendredi ?"),
+    "it": ("ciao! non posso venire alla riunione domani perche sono malato. possiamo spostarla a venerdi?",
+           "Ciao! Non posso venire alla riunione domani perché sono malato. Possiamo spostarla a venerdì?"),
+    "pl": ("cześć! nie moge przyjść jutro na spotkanie bo jestem chory. możemy przełożyć je na piatek?",
+           "Cześć! Nie mogę przyjść jutro na spotkanie, bo jestem chory. Możemy przełożyć je na piątek?"),
+    "pt": ("olá! nao posso ir a reunião amanha porque estou doente. podemos passar-la para sexta?",
+           "Olá! Não posso ir à reunião amanhã porque estou doente. Podemos passá-la para sexta?"),
+    "tr": ("selam! yarın ki toplantıya gelemiycem çünkü hastayım. cumaya erteliyebilirmiyiz?",
+           "Selam! Yarınki toplantıya gelemeyeceğim çünkü hastayım. Cumaya erteleyebilir miyiz?"),
+}
+T_INPUT, T_SEND = 0.3, 3.2
+T_RESULT = 4.6
+T_STYLE_TAP, T_STYLES = 6.6, 6.9
+T_SHORTER_TAP, T_SHORTER = 8.2, 9.6
+DURATION = 12.5
 
 
-def keyboard(active=None, lang="🇬🇧"):
-    tone = lambda e, name: ("✓ " if active == name else "") + e + " " + name
-    return [["🔄 Another version", "📋 Copy"],
-            [tone("🎩", "Formal"), tone("😎", "Casual"), tone("✂️", "Shorter")],
-            ["🌐 Language · " + lang, "💡 What changed"]]
+def bundle(lang):
+    props = {}
+    for line in (I18N_DIR / f"messages_{lang}.properties").read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.startswith("#"):
+            key, value = line.split("=", 1)
+            props[key.strip()] = value.strip()
+    return props
 
 
-BUBBLES = [
-    Bubble(FIRST, True, T_SEND_1),
-    Bubble(FIRST_FIXED, False, 3.9, keyboard(), typing_until=3.9,
-           changes=[(6.6, FORMAL, keyboard("Formal"))], working=(5.2, 6.6, 1, 0), tap=(5.0, 1, 0)),
-    Bubble(SECOND, True, T_SEND_2),
-    Bubble(SECOND_FIXED, False, 11.5, keyboard(), typing_until=11.5),
-]
-TYPING = [(T_SEND_1 + 0.3, 3.9), (T_SEND_2 + 0.3, 11.5)]
-INPUTS = [(T_INPUT_1, T_SEND_1, FIRST), (T_INPUT_2, T_SEND_2, SECOND)]
+@dataclass
+class Scene:
+    bubbles: list
+    typing: list
+    inputs: list
+    working_label: str
+
+
+def scene(lang):
+    t = bundle(lang)
+    typed, fixed = MESSAGES[lang]
+    english, shorter = (fixed, ENGLISH_SHORTER) if lang == "en" else (ENGLISH, ENGLISH_SHORTER)
+    own = dict(TARGETS).get(lang)
+
+    def result(explain):
+        # Quick translation into the user's own language when it's a result language, next to the full picker.
+        quick = [own] if own and lang != "en" else []
+        rows = [[t["btn.copy"], t["btn.style"] + " · 🪶"], quick + [t["btn.language"]]]
+        return rows + [[t["btn.explain"]]] if explain else rows
+
+    styles = [["🎩 " + t["tone.FORMAL"], "😎 " + t["tone.CASUAL"]], [t["btn.shorter"]], [t["btn.back"]]]
+    corrected = lang == "en"
+    answer = Bubble(english, False, T_RESULT, result(corrected), typing_until=T_RESULT,
+                    changes=[(T_STYLES, english, styles),
+                             (T_SHORTER, shorter, result(False))],
+                    working=[(T_SHORTER_TAP + 0.2, T_SHORTER, 1, 0)],
+                    taps=[(T_STYLE_TAP, 0, 1), (T_SHORTER_TAP, 1, 0)])
+    return Scene(bubbles=[Bubble(typed, True, T_SEND), answer],
+                 typing=[(T_SEND + 0.3, T_RESULT)],
+                 inputs=[(T_INPUT, T_SEND, typed)],
+                 working_label=t["btn.working"])
+
+
+SCENE = None
 
 
 def wallpaper():
@@ -299,14 +358,14 @@ def draw_chrome(img, t):
     e = emoji_image("✍️", 30 * SCALE)
     img.alpha_composite(e, (cx - e.width // 2, cy - e.height // 2))
     d.text((cx + r + 18 * SCALE, cy - 30 * SCALE), "Rewryt", font=HEAD_FONT, fill=TEXT)
-    typing = any(a <= t < b for a, b in TYPING)
+    typing = any(a <= t < b for a, b in SCENE.typing) or any(w[0] <= t < w[1] for b in SCENE.bubbles for w in b.working)
     d.text((cx + r + 18 * SCALE, cy + 4 * SCALE), "typing…" if typing else "bot",
            font=SUB_FONT, fill=ACCENT if typing else MUTED)
 
     top = H * SCALE - INPUT_H
     d.rectangle((0, top, W * SCALE, H * SCALE), fill=(255, 255, 255, 250))
     typed = ""
-    for start, send, text in INPUTS:
+    for start, send, text in SCENE.inputs:
         if start <= t < send:
             n = int(len(text) * min(1, (t - start) / (send - start - 0.35)))
             typed = text[:n]
@@ -330,8 +389,8 @@ def draw_chrome(img, t):
 def render(t, base):
     img = base.copy()
     y = H * SCALE - INPUT_H - GAP
-    visible = [b for b in BUBBLES if t >= b.appear]
-    pending_typing = next((a for a, b in TYPING if a <= t < b), None)
+    visible = [b for b in SCENE.bubbles if t >= b.appear]
+    pending_typing = next((a for a, b in SCENE.typing if a <= t < b), None)
     layer_items = []
     if pending_typing is not None:
         layer_items.append(("typing", None))
@@ -348,26 +407,37 @@ def render(t, base):
     return img.resize((W, H), Image.LANCZOS).convert("RGB")
 
 
-def main():
-    MP4_OUT.parent.mkdir(parents=True, exist_ok=True)
-    GIF_OUT.parent.mkdir(parents=True, exist_ok=True)
-    base = wallpaper()
+def render_clip(lang, base):
+    global SCENE
+    SCENE = scene(lang)
+    out = MP4_DIR / f"demo_{lang}.mp4"
     ffmpeg = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
          "-r", str(FPS), "-i", "-", "-an", "-c:v", "libx264", "-preset", "slow", "-crf", "26",
-         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(MP4_OUT)],
+         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out)],
         stdin=subprocess.PIPE)
     for i in range(int(DURATION * FPS)):
         ffmpeg.stdin.write(render(i / FPS, base).tobytes())
     ffmpeg.stdin.close()
     if ffmpeg.wait() != 0:
         raise SystemExit("ffmpeg failed")
-    subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(MP4_OUT), "-vf",
-         "fps=12,scale=360:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer",
-         str(GIF_OUT)], check=True)
-    print(f"{MP4_OUT.relative_to(ROOT)}: {MP4_OUT.stat().st_size // 1024} KB")
-    print(f"{GIF_OUT.relative_to(ROOT)}: {GIF_OUT.stat().st_size // 1024} KB")
+    print(f"{out.relative_to(ROOT)}: {out.stat().st_size // 1024} KB")
+    return out
+
+
+def main():
+    MP4_DIR.mkdir(parents=True, exist_ok=True)
+    GIF_OUT.parent.mkdir(parents=True, exist_ok=True)
+    base = wallpaper()
+    for lang in sys.argv[1:] or MESSAGES:
+        out = render_clip(lang, base)
+        if lang == "en":
+            subprocess.run(
+                ["ffmpeg", "-y", "-loglevel", "error", "-i", str(out), "-vf",
+                 "fps=12,scale=360:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];"
+                 "[b][p]paletteuse=dither=bayer",
+                 str(GIF_OUT)], check=True)
+            print(f"{GIF_OUT.relative_to(ROOT)}: {GIF_OUT.stat().st_size // 1024} KB")
 
 
 if __name__ == "__main__":

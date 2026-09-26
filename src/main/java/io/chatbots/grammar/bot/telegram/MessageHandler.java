@@ -105,6 +105,7 @@ public class MessageHandler {
                 views.sendWelcomeBack(user);
             } else {
                 views.sendWelcome(user);
+                users.completeOnboarding(user.getChatId());
             }
             return;
         }
@@ -112,8 +113,8 @@ public class MessageHandler {
         var user = users.touch(profile(message));
         switch (command) {
             case "/help" -> views.sendHelp(user);
-            case "/settings" -> views.sendSettings(user);
-            case "/language" -> views.sendTargetPicker(user);
+            // The default language is the only setting; /settings stays for old habits.
+            case "/settings", "/language" -> views.sendTargetPicker(user);
             case "/stats" -> {
                 if (properties.isAdmin(user.getChatId())) {
                     gateway.send(user.getChatId(), statistics.buildReport(), null);

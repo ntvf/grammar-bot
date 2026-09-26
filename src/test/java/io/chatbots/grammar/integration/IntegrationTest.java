@@ -71,7 +71,11 @@ public abstract class IntegrationTest {
     }
 
     protected void aiReturns(String text, TextAction action, AiResult.Change... changes) {
-        doReturn(new AiResult(text, "en", action, List.of(changes)))
+        aiReturns(text, "en", action, changes);
+    }
+
+    protected void aiReturns(String text, String detectedLanguage, TextAction action, AiResult.Change... changes) {
+        doReturn(new AiResult(text, detectedLanguage, action, List.of(changes)))
             .when(aiGateway).complete(anyString(), anyString(), anyDouble());
     }
 

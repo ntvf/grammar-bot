@@ -40,6 +40,17 @@ class PromptBuilderTest {
         assertThat(prompt).contains("written in Ukrainian");
     }
 
+    @Test
+    void shortening_severalSentences_dropsOne_singleSentence_dropsWords() {
+        var sentences = PromptBuilder.systemPrompt(new AiRequest("A. B.", Mode.FIX, Language.EN, Tone.NATURAL,
+            Language.EN, null, AiRequest.Shortening.SENTENCE));
+        assertThat(sentences).contains("exactly one sentence shorter").contains("keep it in English")
+            .contains("empty changes list").doesNotContain("Never translate");
+        var words = PromptBuilder.systemPrompt(new AiRequest("A b c.", Mode.FIX, Language.EN, Tone.NATURAL,
+            Language.EN, null, AiRequest.Shortening.WORDS));
+        assertThat(words).contains("at least one word, at most half of them");
+    }
+
     @ParameterizedTest
     @EnumSource(Tone.class)
     void everyToneHasAnInstruction(Tone tone) {

@@ -42,6 +42,10 @@ public class UserService {
         var user = repository.findByChatId(profile.chatId()).orElseGet(() -> create(profile, source, now));
         user.setUsername(truncate(profile.username(), 64));
         user.setFirstName(truncate(profile.firstName(), 128));
+        // There is no interface-language setting: it follows the Telegram app.
+        if (profile.languageCode() != null && !profile.languageCode().isBlank()) {
+            user.setUiLanguage(I18n.resolve(profile.languageCode()));
+        }
         user.setLastActiveAt(now);
         return user;
     }
@@ -52,28 +56,8 @@ public class UserService {
     }
 
     @Transactional
-    public ChatUser setMode(long chatId, Mode mode) {
-        return update(chatId, u -> u.setMode(mode));
-    }
-
-    @Transactional
     public ChatUser setTargetLanguage(long chatId, Language language) {
         return update(chatId, u -> u.setTargetLanguage(language));
-    }
-
-    @Transactional
-    public ChatUser setTone(long chatId, Tone tone) {
-        return update(chatId, u -> u.setTone(tone));
-    }
-
-    @Transactional
-    public ChatUser setUiLanguage(long chatId, String uiLanguage) {
-        return update(chatId, u -> u.setUiLanguage(I18n.resolve(uiLanguage)));
-    }
-
-    @Transactional
-    public ChatUser toggleAutoExplain(long chatId) {
-        return update(chatId, u -> u.setAutoExplain(!u.isAutoExplain()));
     }
 
     @Transactional

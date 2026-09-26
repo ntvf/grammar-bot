@@ -64,8 +64,12 @@ final class Updates {
     }
 
     static Update tap(long chatId, int messageId, String data) {
-        var query = new CallbackQuery("cb-" + messageId + "-" + data, user(chatId, "en"),
-            message(chatId, messageId, "menu", "en"), null, data, null, null);
+        return tap(chatId, messageId, data, "en");
+    }
+
+    static Update tap(long chatId, int messageId, String data, String languageCode) {
+        var query = new CallbackQuery("cb-" + messageId + "-" + data, user(chatId, languageCode),
+            message(chatId, messageId, "menu", languageCode), null, data, null, null);
         var update = new Update();
         update.setCallbackQuery(query);
         return update;

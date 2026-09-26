@@ -16,7 +16,6 @@ import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.AnswerInlineQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendAnimation;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -45,61 +44,38 @@ class BotFlowIntegrationTest extends IntegrationTest {
     @Autowired ChatTaskDispatcher dispatcher;
     @Autowired InlineQueryHandler inlineQueries;
 
-    // ---- onboarding ----
+    // ---- first contact ----
 
     @Test
-    void start_newUser_getsDemoAndFirstQuestionInTheirLanguage() {
+    void start_newUser_getsDemoInTheirLanguage_andCanWriteRightAway() {
         send(CHAT, Updates.text(CHAT, 1, "/start ads_spring-2026!", "uk"));
 
         var animation = last(SendAnimation.class);
-        assertThat(animation.getCaption()).contains("Привіт, Ann");
-        assertThat(last(SendMessage.class).getText()).contains("Крок 1 з 2");
+        assertThat(animation.getCaption()).contains("Привіт, Ann").contains("🇬🇧 English");
+        assertThat(animation.getReplyMarkup()).isNull();
+        assertThat(sent(SendMessage.class)).isEmpty();
         var user = chatUsers.findByChatId(CHAT).orElseThrow();
         assertThat(user.getUiLanguage()).isEqualTo("uk");
         assertThat(user.getSource()).isEqualTo("ads_spring-2026");
-        assertThat(user.isOnboarded()).isFalse();
-    }
-
-    @Test
-    void onboarding_smartMode_asksLanguage_thenFinishes_thenRunsExample() {
-        send(CHAT, Updates.text(CHAT, 1, "/start"));
-
-        send(CHAT, Updates.tap(CHAT, 50, "o:m:0:SMART"));
-        assertThat(last(EditMessageText.class).getText()).contains("Step 2 of 2");
-
-        send(CHAT, Updates.tap(CHAT, 50, "o:l:0:de"));
-        var done = last(EditMessageText.class);
-        assertThat(done.getText()).contains("All set").contains("🇩🇪 Deutsch").contains("@test_grammar_bot");
-        assertThat(buttons(done.getReplyMarkup())).extracting(InlineKeyboardButton::getStyle).contains("success");
-        var user = chatUsers.findByChatId(CHAT).orElseThrow();
         assertThat(user.isOnboarded()).isTrue();
-        assertThat(user.getTargetLanguage()).isEqualTo(Language.DE);
-
-        send(CHAT, Updates.tap(CHAT, 50, "o:x:0:"));
-        var messages = sent(SendMessage.class);
-        assertThat(messages.get(messages.size() - 2).getText()).contains("a few mistakes");
-        assertThat(last(SendMessage.class).getText()).isEqualTo(FIXED);
-    }
-
-    @Test
-    void onboarding_fixMode_skipsLanguageQuestion() {
-        send(CHAT, Updates.text(CHAT, 1, "/start"));
-        send(CHAT, Updates.tap(CHAT, 50, "o:m:0:FIX"));
-
-        assertThat(last(EditMessageText.class).getText()).contains("All set").doesNotContain("Result language");
-        var user = chatUsers.findByChatId(CHAT).orElseThrow();
-        assertThat(user.isOnboarded()).isTrue();
-        assertThat(user.getMode()).isEqualTo(Mode.FIX);
+        assertThat(user.getMode()).isEqualTo(Mode.SMART);
+        assertThat(user.getTargetLanguage()).isEqualTo(Language.EN);
     }
 
     @Test
     void start_returningUser_getsWelcomeBack() {
         send(CHAT, Updates.text(CHAT, 1, "/start"));
-        send(CHAT, Updates.tap(CHAT, 50, "o:m:0:FIX"));
         send(CHAT, Updates.text(CHAT, 2, "/start@test_grammar_bot"));
 
-        assertThat(last(SendMessage.class).getText()).contains("Welcome back");
+        assertThat(last(SendMessage.class).getText()).contains("Welcome back").contains("🇬🇧 English");
         assertThat(sent(SendAnimation.class)).hasSize(1);
+    }
+
+    @Test
+    void interfaceLanguage_followsTheTelegramApp() {
+        send(CHAT, Updates.text(CHAT, 1, "/start", "uk"));
+        send(CHAT, Updates.text(CHAT, 2, "/help", "de"));
+        assertThat(chatUsers.findByChatId(CHAT).orElseThrow().getUiLanguage()).isEqualTo("de");
     }
 
     // ---- texts and results ----
@@ -113,8 +89,7 @@ class BotFlowIntegrationTest extends IntegrationTest {
         assertThat(reply.getParseMode()).isEqualTo("HTML");
         assertThat(reply.getReplyParameters().getMessageId()).isEqualTo(7);
         var labels = labels(reply.getReplyMarkup());
-        assertThat(labels).contains("🔄 Another version", "📋 Copy", "🎩 Formal", "😎 Casual", "✂️ Shorter",
-            "🌐 Language · 🇬🇧", "💡 What changed");
+        assertThat(labels).containsExactly("📋 Copy", "🎨 Style · 🪶", "🌐 Language", "💡 What changed");
         var copy = buttons((InlineKeyboardMarkup) reply.getReplyMarkup()).stream()
             .filter(b -> b.getCopyText() != null).findFirst().orElseThrow();
         assertThat(copy.getCopyText().getText()).isEqualTo(FIXED);
@@ -195,7 +170,7 @@ class BotFlowIntegrationTest extends IntegrationTest {
         send(CHAT, Updates.tap(CHAT, 500, "r:g:" + id + ":"));
 
         var working = sent(EditMessageReplyMarkup.class).getFirst();
-        assertThat(labels(working.getReplyMarkup())).startsWith("⏳ Working on it…", "📋 Copy").contains("🎩 Formal");
+        assertThat(labels(working.getReplyMarkup())).containsExactly("⏳ Working on it…");
         assertThat(last(EditMessageText.class).getText()).isEqualTo("Yesterday I went to the shop.");
         verify(aiGateway).complete(anyString(), contains("<previous>\n" + FIXED), eq(0.9));
         assertThat(textEntries.findById(id).orElseThrow().getVersion()).isEqualTo(1);
@@ -214,8 +189,45 @@ class BotFlowIntegrationTest extends IntegrationTest {
         aiFails();
         send(CHAT, Updates.tap(CHAT, 500, "r:g:" + id + ":"));
         assertThat(last(AnswerCallbackQuery.class).getText()).contains("couldn’t process");
-        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup())).contains("🔄 Another version");
+        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup())).contains("📋 Copy");
         assertThat(textEntries.findById(id).orElseThrow().getResultText()).isEqualTo(FIXED);
+    }
+
+    @Test
+    void stylePicker_offersFormalCasualAndShorter() {
+        var id = processOne();
+
+        send(CHAT, Updates.tap(CHAT, 500, "r:s:" + id + ":"));
+        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup()))
+            .containsExactly("🎩 Formal", "😎 Casual", "✂️ Shorter", "⬅️ Back");
+    }
+
+    @Test
+    void shorter_dropsASentencePerTap_thenWords_thenDisappears() {
+        aiReturns("Hi! I went to the shop. It was closed.", TextAction.CORRECTED);
+        send(CHAT, Updates.text(CHAT, 7, "hi! i has went to the shop. it was closed."));
+        var id = onlyEntry().getId();
+
+        aiReturns("I went to the shop, but it was closed.", TextAction.CORRECTED);
+        send(CHAT, Updates.tap(CHAT, 500, "r:k:" + id + ":"));
+        verify(aiGateway).complete(contains("exactly one sentence shorter"),
+            contains("Hi! I went to the shop. It was closed."), anyDouble());
+        var once = last(EditMessageText.class);
+        assertThat(once.getText()).isEqualTo("I went to the shop, but it was closed.");
+
+        send(CHAT, Updates.tap(CHAT, 500, "r:s:" + id + ":"));
+        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup())).contains("✂️ Shorter");
+
+        aiReturns("The shop was closed.", TextAction.CORRECTED);
+        send(CHAT, Updates.tap(CHAT, 500, "r:k:" + id + ":"));
+        verify(aiGateway).complete(contains("at most half of them"), anyString(), anyDouble());
+        var entry = textEntries.findById(id).orElseThrow();
+        assertThat(entry.getResultText()).isEqualTo("The shop was closed.");
+        assertThat(entry.isShortest()).isTrue();
+        assertThat(entry.getAction()).isEqualTo(TextAction.CORRECTED);
+
+        send(CHAT, Updates.tap(CHAT, 500, "r:s:" + id + ":"));
+        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup())).doesNotContain("✂️ Shorter");
     }
 
     @Test
@@ -224,9 +236,11 @@ class BotFlowIntegrationTest extends IntegrationTest {
         aiReturns("I visited the store yesterday.", TextAction.CORRECTED);
 
         send(CHAT, Updates.tap(CHAT, 500, "r:t:" + id + ":FORMAL"));
+        assertThat(labels(sent(EditMessageReplyMarkup.class).getFirst().getReplyMarkup()))
+            .contains("⏳ Working on it…", "😎 Casual", "⬅️ Back").doesNotContain("🎩 Formal");
         var formal = last(EditMessageText.class);
         assertThat(formal.getText()).isEqualTo("I visited the store yesterday.");
-        assertThat(labels(formal.getReplyMarkup())).contains("✓ 🎩 Formal");
+        assertThat(labels(formal.getReplyMarkup())).contains("🎨 Style · 🎩");
         verify(aiGateway).complete(contains("formal register"), anyString(), anyDouble());
 
         send(CHAT, Updates.tap(CHAT, 500, "r:t:" + id + ":FORMAL"));
@@ -238,16 +252,96 @@ class BotFlowIntegrationTest extends IntegrationTest {
         var id = processOne();
 
         send(CHAT, Updates.tap(CHAT, 500, "r:l:" + id + ":"));
-        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup()))
-            .startsWith("✓ 🇬🇧 English").contains("🇩🇪 Deutsch", "⬅️ Back");
+        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup())).containsExactly(
+            "✓ 🇬🇧 English", "🇩🇪 Deutsch", "🇪🇸 Español", "🇮🇹 Italiano", "🇫🇷 Français", "🇵🇱 Polski",
+            "🇺🇦 Українська", "⬅️ Back");
 
         send(CHAT, Updates.tap(CHAT, 500, "r:b:" + id + ":"));
-        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup())).contains("🔄 Another version");
+        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup())).contains("🎨 Style · 🪶");
 
-        aiReturns("Ich war gestern im Laden.", TextAction.TRANSLATED);
+        aiReturns("Ich war gestern im Laden.", TextAction.TRANSLATED,
+            new AiResult.Change("has went", "went", "past tense"));
         send(CHAT, Updates.tap(CHAT, 500, "r:L:" + id + ":de"));
-        assertThat(last(EditMessageText.class).getText()).isEqualTo("Ich war gestern im Laden.");
+        var translated = last(EditMessageText.class);
+        assertThat(translated.getText()).isEqualTo("Ich war gestern im Laden.");
+        assertThat(labels(translated.getReplyMarkup())).doesNotContain("💡 What changed");
         verify(aiGateway).complete(contains("into German"), anyString(), anyDouble());
+
+        send(CHAT, Updates.tap(CHAT, 500, "r:L:" + id + ":pt"));
+        assertThat(textEntries.findById(id).orElseThrow().getTargetLanguage()).isEqualTo(Language.DE);
+    }
+
+    @Test
+    void nativeLanguage_isTranslated_andUsedLanguagesAppearAsQuickButtons() {
+        aiReturns("I went to the shop yesterday.", "uk", TextAction.TRANSLATED);
+        send(CHAT, Updates.text(CHAT, 7, "я вчора ходив у магазин", "uk"));
+        verify(aiGateway).complete(contains("If the text is written in English, correct it"), anyString(), anyDouble());
+        var first = last(SendMessage.class);
+        assertThat(labels(first.getReplyMarkup())).containsExactly(
+            "📋 Копіювати", "🎨 Стиль · 🪶", "🇺🇦 Українська", "🌐 Мова");
+
+        aiReturns("Wczoraj poszedłem do sklepu.", "uk", TextAction.TRANSLATED);
+        var id = onlyEntry().getId();
+        var quickData = "r:L:" + id + ":pl";
+        send(CHAT, Updates.tap(CHAT, 500, "r:l:" + id + ":", "uk"));
+        send(CHAT, Updates.tap(CHAT, 500, quickData, "uk"));
+        assertThat(textEntries.findById(id).orElseThrow().getTargetLanguage()).isEqualTo(Language.PL);
+
+        aiReturns("I will be late.", "uk", TextAction.TRANSLATED);
+        send(CHAT, Updates.text(CHAT, 8, "я запізнюсь", "uk"));
+        assertThat(labels(last(SendMessage.class).getReplyMarkup())).containsExactly(
+            "📋 Копіювати", "🎨 Стиль · 🪶", "🇵🇱 Polski", "🇺🇦 Українська", "🌐 Мова");
+    }
+
+    @Test
+    void quickLanguageTap_showsWorkingOnTheResultItself() {
+        aiReturns("I went to the shop yesterday.", "uk", TextAction.TRANSLATED);
+        send(CHAT, Updates.text(CHAT, 7, "я вчора ходив у магазин", "uk"));
+        var id = onlyEntry().getId();
+
+        aiReturns("Я вчора ходив у магазин.", "uk", TextAction.CORRECTED);
+        send(CHAT, Updates.tap(CHAT, 500, "r:L:" + id + ":uk", "uk"));
+        assertThat(labels(sent(EditMessageReplyMarkup.class).getFirst().getReplyMarkup()))
+            .contains("⏳ Працюю…", "📋 Копіювати", "🌐 Мова");
+    }
+
+    @Test
+    void usedForeignLanguage_isCorrectedInPlace_notTranslated() {
+        var id = processOne();
+        aiReturns("Wczoraj poszedłem do sklepu.", TextAction.TRANSLATED);
+        send(CHAT, Updates.tap(CHAT, 500, "r:L:" + id + ":pl"));
+
+        aiReturns("Idę do sklepu.", "pl", TextAction.CORRECTED);
+        send(CHAT, Updates.text(CHAT, 8, "ide do sklepu", "uk"));
+        verify(aiGateway).complete(contains("If the text is written in English or Polish, correct it in that same "
+            + "language"), anyString(), anyDouble());
+        var latest = textEntries.findAll().stream().max(java.util.Comparator.comparing(TextEntry::getId)).orElseThrow();
+        assertThat(latest.getTargetLanguage()).isEqualTo(Language.PL);
+        assertThat(labels(last(SendMessage.class).getReplyMarkup())).contains("🇬🇧 English");
+    }
+
+    @Test
+    void nativeLanguage_isNeverCorrectedInPlace_evenAfterTranslatingIntoIt() {
+        aiReturns("I went.", "uk", TextAction.TRANSLATED);
+        send(CHAT, Updates.text(CHAT, 7, "я ходив", "uk"));
+        aiReturns("Я ходив.", "uk", TextAction.CORRECTED);
+        send(CHAT, Updates.tap(CHAT, 500, "r:L:" + onlyEntry().getId() + ":uk", "uk"));
+
+        send(CHAT, Updates.text(CHAT, 8, "я прийшов", "uk"));
+        verify(aiGateway, org.mockito.Mockito.never()).complete(contains("or Ukrainian"), anyString(), anyDouble());
+    }
+
+    @Test
+    void languagePicker_putsTheUsersFrequentLanguagesFirst() {
+        var id = processOne();
+        aiReturns("Wczoraj poszedłem do sklepu.", TextAction.TRANSLATED);
+        send(CHAT, Updates.tap(CHAT, 500, "r:L:" + id + ":pl"));
+
+        send(CHAT, Updates.text(CHAT, 8, "another text"));
+        var second = textEntries.findAll().stream().mapToLong(e -> e.getId()).max().orElseThrow();
+        send(CHAT, Updates.tap(CHAT, 501, "r:l:" + second + ":"));
+        assertThat(labels(last(EditMessageReplyMarkup.class).getReplyMarkup()))
+            .startsWith("✓ 🇬🇧 English", "🇵🇱 Polski", "🇩🇪 Deutsch");
     }
 
     @Test
@@ -261,6 +355,19 @@ class BotFlowIntegrationTest extends IntegrationTest {
 
         send(CHAT, Updates.tap(CHAT, 500, "r:e:" + id + ":"));
         assertThat(last(EditMessageText.class).getText()).isEqualTo(FIXED);
+    }
+
+    @Test
+    void longResult_copyResendsTheTextAsCodeBlock() {
+        var longText = "Yesterday I went to the shop. ".repeat(10).strip();
+        aiReturns(longText, TextAction.CORRECTED);
+        send(CHAT, Updates.text(CHAT, 7, "i has went"));
+        var copy = buttons((InlineKeyboardMarkup) last(SendMessage.class).getReplyMarkup()).getFirst();
+        assertThat(copy.getText()).isEqualTo("📋 Copy");
+        assertThat(copy.getCopyText()).isNull();
+
+        send(CHAT, Updates.tap(CHAT, 500, copy.getCallbackData()));
+        assertThat(last(SendMessage.class).getText()).isEqualTo("<pre>" + longText + "</pre>");
     }
 
     @Test
@@ -304,73 +411,35 @@ class BotFlowIntegrationTest extends IntegrationTest {
         assertThat(sent(EditMessageText.class)).isEmpty();
     }
 
-    // ---- settings and commands ----
+    // ---- commands ----
 
     @Test
-    void settings_everyOptionCanBeChanged() {
+    void settingsAndLanguageCommands_bothOpenTheDefaultLanguagePicker() {
         send(CHAT, Updates.text(CHAT, 1, "/settings"));
-        assertThat(last(SendMessage.class).getText()).contains("Settings").contains("✨ <b>Smart</b>");
+        var picker = last(SendMessage.class);
+        assertThat(picker.getText()).contains("translate into by default");
+        assertThat(labels(picker.getReplyMarkup())).startsWith("✓ 🇬🇧 English");
 
-        send(CHAT, Updates.tap(CHAT, 60, "s:m:0:"));
-        assertThat(labels(last(EditMessageText.class).getReplyMarkup())).contains("✓ ✨ Smart");
-        send(CHAT, Updates.tap(CHAT, 60, "s:m:0:TRANSLATE"));
-        assertThat(last(AnswerCallbackQuery.class).getText()).isEqualTo("✅ Saved");
-
-        send(CHAT, Updates.tap(CHAT, 60, "s:l:0:"));
-        send(CHAT, Updates.tap(CHAT, 60, "s:l:0:pl"));
-        send(CHAT, Updates.tap(CHAT, 60, "s:t:0:"));
-        assertThat(labels(last(EditMessageText.class).getReplyMarkup())).contains("✓ 🪶 Natural");
-        send(CHAT, Updates.tap(CHAT, 60, "s:t:0:BUSINESS"));
-        send(CHAT, Updates.tap(CHAT, 60, "s:e:0:"));
-        send(CHAT, Updates.tap(CHAT, 60, "s:u:0:"));
-        send(CHAT, Updates.tap(CHAT, 60, "s:u:0:de"));
-        assertThat(last(EditMessageText.class).getText()).contains("Einstellungen");
-
-        var user = chatUsers.findByChatId(CHAT).orElseThrow();
-        assertThat(user.getMode()).isEqualTo(Mode.TRANSLATE);
-        assertThat(user.getTargetLanguage()).isEqualTo(Language.PL);
-        assertThat(user.getTone()).isEqualTo(Tone.BUSINESS);
-        assertThat(user.isAutoExplain()).isTrue();
-        assertThat(user.getUiLanguage()).isEqualTo("de");
-
-        send(CHAT, Updates.tap(CHAT, 60, "s:h:0:"));
-        send(CHAT, Updates.tap(CHAT, 60, "s:c:0:"));
-        assertThat(last(DeleteMessage.class).getMessageId()).isEqualTo(60);
+        send(CHAT, Updates.text(CHAT, 2, "/language"));
+        send(CHAT, Updates.tap(CHAT, 70, "p:l:0:pl"));
+        assertThat(last(EditMessageText.class).getText()).isEqualTo("✅ Default language: 🇵🇱 Polski");
+        assertThat(chatUsers.findByChatId(CHAT).orElseThrow().getTargetLanguage()).isEqualTo(Language.PL);
     }
 
     @Test
-    void settings_unsupportedInterfaceLanguage_isIgnored() {
-        send(CHAT, Updates.text(CHAT, 1, "/settings"));
-        send(CHAT, Updates.tap(CHAT, 60, "s:u:0:ja"));
-        assertThat(chatUsers.findByChatId(CHAT).orElseThrow().getUiLanguage()).isEqualTo("en");
-    }
-
-    @Test
-    void autoExplain_showsChangesImmediately() {
-        send(CHAT, Updates.text(CHAT, 1, "/settings"));
-        send(CHAT, Updates.tap(CHAT, 60, "s:e:0:"));
-        send(CHAT, Updates.text(CHAT, 7, "i has went"));
-        assertThat(last(SendMessage.class).getText()).contains("<blockquote>");
-    }
-
-    @Test
-    void languageCommand_switchesFixModeToSmart() {
+    void buttonsFromTheOldSetupAndSettings_areIgnored() {
         send(CHAT, Updates.text(CHAT, 1, "/start"));
         send(CHAT, Updates.tap(CHAT, 50, "o:m:0:FIX"));
-        send(CHAT, Updates.text(CHAT, 2, "/language"));
-        assertThat(last(SendMessage.class).getText()).contains("Which language");
-
-        send(CHAT, Updates.tap(CHAT, 70, "p:l:0:fr"));
-        assertThat(last(EditMessageText.class).getText()).contains("🇫🇷 Français");
-        var user = chatUsers.findByChatId(CHAT).orElseThrow();
-        assertThat(user.getTargetLanguage()).isEqualTo(Language.FR);
-        assertThat(user.getMode()).isEqualTo(Mode.SMART);
+        send(CHAT, Updates.tap(CHAT, 60, "s:m:0:TRANSLATE"));
+        assertThat(sent(AnswerCallbackQuery.class)).hasSize(2);
+        assertThat(chatUsers.findByChatId(CHAT).orElseThrow().getMode()).isEqualTo(Mode.SMART);
     }
 
     @Test
     void help_sendsDemoWithInstructions() {
         send(CHAT, Updates.text(CHAT, 1, "/help"));
-        assertThat(last(SendAnimation.class).getCaption()).contains("How to use me").contains("@test_grammar_bot");
+        assertThat(last(SendAnimation.class).getCaption()).contains("How to use me").contains("@test_grammar_bot")
+            .contains("🇬🇧 English");
     }
 
     @Test

@@ -1,7 +1,6 @@
 package io.chatbots.grammar.service;
 
 import io.chatbots.grammar.domain.Language;
-import io.chatbots.grammar.domain.Mode;
 import io.chatbots.grammar.domain.Tone;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,7 +43,6 @@ class I18nTest {
     @Test
     void everyEnumHasALabel() {
         for (var lang : I18n.SUPPORTED) {
-            for (var mode : Mode.values()) assertThat(i18n.t(lang, "mode." + mode.name())).doesNotStartWith("mode.");
             for (var tone : Tone.values()) assertThat(i18n.t(lang, "tone." + tone.name())).doesNotStartWith("tone.");
         }
     }
@@ -57,7 +55,7 @@ class I18nTest {
                 .hasSizeLessThanOrEqualTo(512);
             assertThat(i18n.t(lang, "help.text", "a_32_characters_long_bot_username")).as(lang)
                 .hasSizeLessThanOrEqualTo(1024);
-            for (var cmd : new String[]{"cmd.settings", "cmd.language", "cmd.help"}) {
+            for (var cmd : new String[]{"cmd.language", "cmd.help"}) {
                 assertThat(i18n.t(lang, cmd)).as(lang).hasSizeBetween(3, 256);
             }
         }

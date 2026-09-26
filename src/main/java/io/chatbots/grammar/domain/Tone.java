@@ -3,10 +3,7 @@ package io.chatbots.grammar.domain;
 public enum Tone {
     NATURAL("🪶"),
     FORMAL("🎩"),
-    CASUAL("😎"),
-    FRIENDLY("🤗"),
-    BUSINESS("💼"),
-    SHORTER("✂️");
+    CASUAL("😎");
 
     private final String emoji;
 

@@ -31,7 +31,7 @@ class TextServiceIntegrationTest extends IntegrationTest {
     }
 
     @Test
-    void newUser_getsDefaults_andProfileUpdatesOnlyTouchVolatileFields() {
+    void newUser_getsDefaults_andProfileUpdatesFollowTelegram() {
         var created = user(1L);
         assertThat(created.getUiLanguage()).isEqualTo("uk");
         assertThat(created.getTargetLanguage()).isEqualTo(Language.EN);
@@ -40,8 +40,11 @@ class TextServiceIntegrationTest extends IntegrationTest {
 
         var again = users.touch(new UserService.Profile(1L, "ann2", "Anna", "de"), "other");
         assertThat(again.getUsername()).isEqualTo("ann2");
-        assertThat(again.getUiLanguage()).isEqualTo("uk");
+        assertThat(again.getUiLanguage()).isEqualTo("de");
         assertThat(again.getSource()).isEqualTo("ref");
+
+        var noLanguage = users.touch(new UserService.Profile(1L, "ann2", "Anna", null));
+        assertThat(noLanguage.getUiLanguage()).isEqualTo("de");
         assertThat(chatUsers.count()).isEqualTo(1);
     }
 
@@ -66,28 +69,6 @@ class TextServiceIntegrationTest extends IntegrationTest {
         assertThat(stored.getStatus()).isEqualTo(TextStatus.DONE);
         assertThat(stored.getResultText()).isEqualTo("Hello.");
         assertThat(stored.getTone()).isEqualTo(Tone.NATURAL);
-    }
-
-    @Test
-    void restyle_toTheUsersOwnDefault_fallsBackToNatural() {
-        var user = user(1L);
-        users.setTone(1L, Tone.CASUAL);
-        user = users.find(1L).orElseThrow();
-        var entry = texts.process(user, "hello", 1);
-        assertThat(entry.getTone()).isEqualTo(Tone.CASUAL);
-
-        var outcome = texts.restyle(entry, Tone.CASUAL);
-        assertThat(outcome.entry().getTone()).isEqualTo(Tone.NATURAL);
-    }
-
-    @Test
-    void retarget_turnsFixIntoSmart() {
-        users.touch(new UserService.Profile(1L, null, null, null));
-        users.setMode(1L, Mode.FIX);
-        var entry = texts.process(users.find(1L).orElseThrow(), "hello", 1);
-        var outcome = texts.retarget(entry, Language.ES);
-        assertThat(outcome.entry().getMode()).isEqualTo(Mode.SMART);
-        assertThat(outcome.entry().getTargetLanguage()).isEqualTo(Language.ES);
     }
 
     @Test

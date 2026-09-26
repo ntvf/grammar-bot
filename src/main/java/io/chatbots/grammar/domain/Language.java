@@ -5,7 +5,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Languages the bot can write results in. */
+/**
+ * Languages the bot knows by name: detected source languages and explanation languages. Only {@link #TARGETS}
+ * can be picked as a result language.
+ */
 public enum Language {
     EN("en", "🇬🇧", "English", "English"),
     UK("uk", "🇺🇦", "Ukrainian", "Українська"),
@@ -28,6 +31,9 @@ public enum Language {
     KO("ko", "🇰🇷", "Korean", "한국어"),
     HE("he", "🇮🇱", "Hebrew", "עברית"),
     KA("ka", "🇬🇪", "Georgian", "ქართული");
+
+    /** Result languages offered to users, in picker order. */
+    public static final List<Language> TARGETS = List.of(EN, DE, ES, IT, FR, PL, UK);
 
     private final String code;
     private final String flag;
@@ -57,6 +63,10 @@ public enum Language {
         return nativeName;
     }
 
+    public boolean isTarget() {
+        return TARGETS.contains(this);
+    }
+
     public String label() {
         return flag + " " + nativeName;
     }
@@ -68,13 +78,13 @@ public enum Language {
         return Arrays.stream(values()).filter(l -> l.code.equals(primary)).findFirst();
     }
 
-    /** All languages with the preferred ones moved to the front, in the given order. */
+    /** All {@link #TARGETS} with the preferred ones moved to the front, in the given order. */
     public static List<Language> ordered(Language... preferred) {
         var result = new java.util.ArrayList<Language>();
         for (var l : preferred) {
-            if (l != null && !result.contains(l)) result.add(l);
+            if (l != null && l.isTarget() && !result.contains(l)) result.add(l);
         }
-        for (var l : values()) {
+        for (var l : TARGETS) {
             if (!result.contains(l)) result.add(l);
         }
         return List.copyOf(result);

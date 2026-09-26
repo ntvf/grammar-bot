@@ -3,6 +3,7 @@ package io.chatbots.grammar.bot.telegram;
 import io.chatbots.grammar.bot.Keyboards;
 import io.chatbots.grammar.bot.ResultFormatter;
 import io.chatbots.grammar.domain.ChatUser;
+import io.chatbots.grammar.domain.TextAction;
 import io.chatbots.grammar.domain.TextEntry;
 import io.chatbots.grammar.service.I18n;
 import io.chatbots.grammar.service.TextService;
@@ -31,72 +32,30 @@ public class BotViews {
         this.botUsername = botUsername;
     }
 
-    /** Mode, language and style in a few human-readable lines. */
-    public String summary(ChatUser user, boolean full) {
-        var lang = user.getUiLanguage();
-        var sb = new StringBuilder();
-        sb.append(i18n.t(lang, "summary.mode",
-            user.getMode().emoji() + " <b>" + i18n.t(lang, "mode." + user.getMode().name()) + "</b>"));
-        if (user.getMode().usesTargetLanguage()) {
-            sb.append('\n').append(i18n.t(lang, "summary.target", "<b>" + user.getTargetLanguage().label() + "</b>"));
-        }
-        sb.append('\n').append(i18n.t(lang, "summary.tone",
-            user.getTone().emoji() + " <b>" + i18n.t(lang, "tone." + user.getTone().name()) + "</b>"));
-        if (full) {
-            sb.append('\n').append(i18n.t(lang, "summary.explain",
-                "<b>" + i18n.t(lang, user.isAutoExplain() ? "common.on" : "common.off") + "</b>"));
-            sb.append('\n').append(i18n.t(lang, "summary.ui", "<b>" + i18n.t(lang, "language.name") + "</b>"));
-        }
-        return sb.toString();
-    }
-
+    /** The demo clip with a short pitch; there is nothing to set up, the user can start writing right away. */
     public void sendWelcome(ChatUser user) {
         var lang = user.getUiLanguage();
-        var caption = i18n.t(lang, "welcome.caption", displayName(user));
-        if (!demo.send(user.getChatId(), caption, null)) {
+        var caption = i18n.t(lang, "welcome.caption", displayName(user), user.getTargetLanguage().label());
+        if (!demo.send(user.getChatId(), lang, caption, null)) {
             gateway.send(user.getChatId(), caption, null);
         }
-        gateway.send(user.getChatId(), modeQuestion(lang, true), keyboards.onboardingModes(lang));
-    }
-
-    public String modeQuestion(String lang, boolean onboarding) {
-        var prefix = onboarding ? i18n.t(lang, "onboarding.step", 1, 2) + " · " : "";
-        return prefix + i18n.t(lang, "question.mode") + "\n\n" + i18n.t(lang, "mode.descriptions");
-    }
-
-    public String languageQuestion(String lang, boolean onboarding) {
-        var prefix = onboarding ? i18n.t(lang, "onboarding.step", 2, 2) + " · " : "";
-        return prefix + i18n.t(lang, "question.target");
-    }
-
-    public String onboardingDone(ChatUser user) {
-        var lang = user.getUiLanguage();
-        return i18n.t(lang, "onboarding.done", summary(user, false)) + "\n\n" + i18n.t(lang, "tip.inline", botUsername);
     }
 
     public void sendWelcomeBack(ChatUser user) {
-        var lang = user.getUiLanguage();
-        gateway.send(user.getChatId(), i18n.t(lang, "welcome.back", displayName(user), summary(user, false)),
-            keyboards.welcomeBack(lang));
+        gateway.send(user.getChatId(), i18n.t(user.getUiLanguage(), "welcome.back", displayName(user),
+            user.getTargetLanguage().label()), null);
     }
 
     public void sendHelp(ChatUser user) {
-        var text = i18n.t(user.getUiLanguage(), "help.text", botUsername);
-        if (!demo.send(user.getChatId(), text, null)) {
+        var text = i18n.t(user.getUiLanguage(), "help.text", botUsername, user.getTargetLanguage().label());
+        if (!demo.send(user.getChatId(), user.getUiLanguage(), text, null)) {
             gateway.send(user.getChatId(), text, null);
         }
     }
 
-    public String settingsText(ChatUser user) {
-        return i18n.t(user.getUiLanguage(), "settings.title", summary(user, true));
-    }
-
-    public void sendSettings(ChatUser user) {
-        gateway.send(user.getChatId(), settingsText(user), keyboards.settingsHome(user));
-    }
-
     public void sendTargetPicker(ChatUser user) {
-        gateway.send(user.getChatId(), languageQuestion(user.getUiLanguage(), false), keyboards.targetPicker(user));
+        gateway.send(user.getChatId(), i18n.t(user.getUiLanguage(), "question.target"), keyboards.targetPicker(user,
+            textService.languageOrder(user, user.getTargetLanguage())));
     }
 
     public String renderResult(TextEntry entry) {
@@ -114,7 +73,14 @@ public class BotViews {
     }
 
     public InlineKeyboardMarkup resultKeyboard(TextEntry entry) {
-        return keyboards.result(entry, !textService.changes(entry).isEmpty(), entry.getChatUser().getUiLanguage());
+        var user = entry.getChatUser();
+        return keyboards.result(entry, explainable(entry), user.getUiLanguage(),
+            textService.quickLanguages(user, entry.getTargetLanguage()));
+    }
+
+    /** Translations don't get "What changed": listing differences between two languages isn't useful. */
+    public boolean explainable(TextEntry entry) {
+        return entry.getAction() != TextAction.TRANSLATED && !textService.changes(entry).isEmpty();
     }
 
     public String botUsername() {

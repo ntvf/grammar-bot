@@ -24,7 +24,8 @@ class LanguageTest {
     void ordered_putsPreferredFirstWithoutDuplicates() {
         var ordered = Language.ordered(Language.DE, null, Language.EN, Language.DE);
         assertThat(ordered).startsWith(Language.DE, Language.EN)
-            .hasSize(Language.values().length).doesNotHaveDuplicates();
+            .hasSize(Language.TARGETS.size()).doesNotHaveDuplicates();
+        assertThat(Language.ordered(Language.RU)).isEqualTo(Language.TARGETS);
     }
 
     @Test

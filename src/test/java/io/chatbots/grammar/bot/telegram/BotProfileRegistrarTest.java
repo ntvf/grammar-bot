@@ -29,7 +29,7 @@ class BotProfileRegistrarTest {
         var ukCommands = captor.getAllValues().stream()
             .filter(SetMyCommands.class::isInstance).map(SetMyCommands.class::cast)
             .filter(c -> "uk".equals(c.getLanguageCode())).findFirst().orElseThrow();
-        assertThat(ukCommands.getCommands()).extracting(c -> c.getCommand()).containsExactly("settings", "language", "help");
+        assertThat(ukCommands.getCommands()).extracting(c -> c.getCommand()).containsExactly("language", "help");
         assertThat(captor.getAllValues().stream().filter(SetMyDescription.class::isInstance)
             .map(d -> ((SetMyDescription) d).getDescription())).allMatch(d -> d.contains("@my_bot"));
     }

@@ -6,29 +6,31 @@
 
 [@RewrytBot](https://t.me/RewrytBot) is a Telegram bot that polishes and translates your messages before you send them. Write something — get it
 back corrected, or translated into the language you need, keeping your own voice. One tap for another
-version, a different style, another language, or an explanation of what changed.
+language, a different style, a shorter version, or an explanation of what changed.
 
-<p align="center"><img src="docs/demo.gif" width="360" alt="Demo: a message is corrected, made formal, and a Ukrainian message is translated to English"></p>
+<p align="center"><img src="docs/demo.gif" width="360" alt="Demo: a message is corrected, translated, then made shorter"></p>
 
 ## How it works for the user
 
-**First run** (`/start`) — a 14-second demo clip, then two taps:
-1. *What should I do with your messages?* — ✨ **Smart** (fix if it's already in the target language, otherwise translate) · ✍️ **Fix only** · 🌐 **Translate**
-2. *Which language should the result be in?* (skipped for *Fix only*)
+**First run** (`/start`) — a 12-second demo clip in the user's interface language and a short pitch. No
+questions: the user just starts writing. The only setting is the **default language** (English unless changed).
 
-…and a **🧪 Try an example** button that runs a sentence with typical mistakes in the user's own language.
-Users who skip onboarding and just type still get sensible defaults (Smart → English).
+**What happens to a message** — the bot decides, no modes to choose:
+- in the default language → corrected;
+- in a language the user has translated into before (e.g. Polish) → corrected in that language;
+- anything else, including the user's native (interface) language → translated into the default language.
 
 **Every result** is sent as a reply to the original, containing *only* the resulting text (so copy/forward
 gives exactly what you want to send), with buttons:
 
 | | |
 |---|---|
-| 🔄 Another version | Re-words the result (higher temperature, told to differ from the current one) |
-| 📋 Copy | One-tap copy (Telegram `copy_text`, shown for results ≤ 256 chars) |
-| 🎩 Formal · 😎 Casual · ✂️ Shorter | One-off restyle; active style is marked ✓, tap again to revert |
-| 🌐 Language · 🇬🇧 | Re-render this text in any of 21 languages |
-| 💡 What changed | Expands up to 5 fixes: ~~original~~ → **fix** — *why* (in the user's interface language) |
+| 📋 Copy | Always shown: one-tap copy (Telegram `copy_text`) up to 256 chars, longer results are resent as a copyable code block |
+| 💡 What changed | Expands up to 5 fixes: ~~original~~ → **fix** — *why* (in the user's interface language). Not shown for translations |
+| 🎨 Style · 🪶 | Opens the style picker: 🎩 Formal / 😎 Casual as a one-off restyle (active one marked ✓, tap again to revert to Natural), and ✂️ Shorter |
+| ✂️ Shorter | Shortens the current result, one step per tap: one sentence less while there are several, then fewer words (up to half) of the last one, after which the button disappears |
+| 🇵🇱 Polski · 🇺🇦 Українська | Up to two one-tap translations: the user's most used languages, then the default and native ones |
+| 🌐 Language | Opens the full picker: English, German, Spanish, Italian, French, Polish or Ukrainian. Ordered per user: current, interface language, then most used |
 
 While the model works, only the tapped button turns into *⏳ Working on it…* — nothing jumps around.
 
@@ -36,9 +38,8 @@ While the model works, only the tapped button turns into *⏳ Working on it…* 
 - **Inline mode** — type `@your_bot some text` in *any* chat and send the fixed version without switching chats. Queries are debounced server-side so only the text the user paused on hits the model.
 - **Edit your message** → the bot updates its answer in place.
 - Photo **captions** and forwarded messages work too.
-- `/settings` — mode, result language, default style (Natural, Formal, Casual, Friendly, Business, Shorter), auto-explanations, interface language. Everything edits one message in place.
-- `/language` — quick result-language switch. `/help` — how-to with the demo clip.
-- Interface in 10 languages (en, uk, ru, de, es, fr, it, pl, pt, tr), incl. localized command menu and the "What can this bot do?" description.
+- `/language` — default language (`/settings` opens the same picker). `/help` — how-to with the demo clip.
+- Interface in 10 languages (en, uk, ru, de, es, fr, it, pl, pt, tr), following the user's Telegram app, incl. localized command menu and the "What can this bot do?" description.
 - A failed model call shows **🔄 Try again**, which fills in the same message on success.
 
 ## Tech stack
@@ -127,5 +128,5 @@ are purged after 30 days (`app.retention-days`). When a user blocks the bot, the
 
 ## Demo clip
 
-`src/main/resources/onboarding/demo.mp4` and `docs/demo.gif` are rendered by
-`tools/demo/generate_demo.py` (Pillow + ffmpeg) — regenerate them if the result keyboard changes.
+`src/main/resources/onboarding/demo_<lang>.mp4` (one per interface language) and `docs/demo.gif` are rendered by
+`tools/demo/generate_demo.py` (Pillow + ffmpeg) — regenerate them if the result keyboard or its labels change.

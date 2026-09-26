@@ -53,7 +53,6 @@ public class BotProfileRegistrar {
 
     private void register(String languageCode, String lang) {
         var commands = List.of(
-            new BotCommand("settings", i18n.t(lang, "cmd.settings")),
             new BotCommand("language", i18n.t(lang, "cmd.language")),
             new BotCommand("help", i18n.t(lang, "cmd.help")));
         gateway.execute(SetMyCommands.builder().commands(commands).languageCode(languageCode).build());

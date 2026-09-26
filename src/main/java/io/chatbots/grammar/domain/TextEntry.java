@@ -68,6 +68,10 @@ public class TextEntry {
     @Column(name = "explanation_shown", nullable = false)
     private boolean explanationShown;
 
+    /** Shortened down to a single sentence already: the "Shorter" button is gone. */
+    @Column(name = "shortest", nullable = false)
+    private boolean shortest;
+
     @Column(name = "version", nullable = false)
     private int version;
 
@@ -183,6 +187,14 @@ public class TextEntry {
 
     public void setExplanationShown(boolean explanationShown) {
         this.explanationShown = explanationShown;
+    }
+
+    public boolean isShortest() {
+        return shortest;
+    }
+
+    public void setShortest(boolean shortest) {
+        this.shortest = shortest;
     }
 
     public int getVersion() {

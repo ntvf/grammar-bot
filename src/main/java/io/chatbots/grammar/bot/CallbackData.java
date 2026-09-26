@@ -10,10 +10,6 @@ public record CallbackData(String scope, String action, long id, String arg) {
 
     /** Buttons under a result message; id is the text entry. */
     public static final String RESULT = "r";
-    /** First-run setup. */
-    public static final String ONBOARDING = "o";
-    /** /settings panel. */
-    public static final String SETTINGS = "s";
     /** Standalone /language picker. */
     public static final String PICKER = "p";
     /** Inert button, e.g. "Working on it…". */
