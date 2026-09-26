@@ -41,9 +41,13 @@ public class BotViews {
         }
     }
 
+    /** Returning users get the clip too: /start always shows how the bot works. */
     public void sendWelcomeBack(ChatUser user) {
-        gateway.send(user.getChatId(), i18n.t(user.getUiLanguage(), "welcome.back", displayName(user),
-            user.getTargetLanguage().label()), null);
+        var lang = user.getUiLanguage();
+        var caption = i18n.t(lang, "welcome.back", displayName(user), user.getTargetLanguage().label());
+        if (!demo.send(user.getChatId(), lang, caption, null)) {
+            gateway.send(user.getChatId(), caption, null);
+        }
     }
 
     public void sendHelp(ChatUser user) {

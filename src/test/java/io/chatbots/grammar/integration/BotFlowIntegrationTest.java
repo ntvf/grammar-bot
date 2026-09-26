@@ -67,8 +67,9 @@ class BotFlowIntegrationTest extends IntegrationTest {
         send(CHAT, Updates.text(CHAT, 1, "/start"));
         send(CHAT, Updates.text(CHAT, 2, "/start@test_grammar_bot"));
 
-        assertThat(last(SendMessage.class).getText()).contains("Welcome back").contains("🇬🇧 English");
-        assertThat(sent(SendAnimation.class)).hasSize(1);
+        assertThat(last(SendAnimation.class).getCaption()).contains("Welcome back").contains("🇬🇧 English");
+        assertThat(sent(SendAnimation.class)).hasSize(2);
+        assertThat(sent(SendMessage.class)).isEmpty();
     }
 
     @Test
